@@ -12,38 +12,22 @@ export default function Page() {
   const [result, setResult] = useState<ParsedWorkout | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🧩 bezpečný převod souboru na Base64 (po blocích)
-  async function fileToBase64(file: File) {
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000; // 32 kB
-    let binary = "";
-
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, chunk as any);
-    }
-
-    return btoa(binary);
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
     setLoading(true);
 
     try {
-      const base64 = await fileToBase64(file);
+      // 🧩 místo Base64 vytvoříme FormData
+      const formData = new FormData();
+      formData.append("file", file, file.name);
 
       const res = await fetch("/api/parse", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, base64 })
+        body: formData,
       });
 
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
       const data: ParsedWorkout = await res.json();
       setResult(data);
