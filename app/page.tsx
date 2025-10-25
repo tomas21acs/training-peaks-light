@@ -12,22 +12,47 @@ export default function Page() {
   const [result, setResult] = useState<ParsedWorkout | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // 🧩 bezpečný převod souboru na Base64 (po blocích)
+  async function fileToBase64(file: File) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000; // 32 kB
+    let binary = "";
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk as any);
+    }
+
+    return btoa(binary);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
     setLoading(true);
-    const buf = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
 
-    const res = await fetch("/api/parse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, base64 })
-    });
+    try {
+      const base64 = await fileToBase64(file);
 
-    const data: ParsedWorkout = await res.json();
-    setResult(data);
-    setLoading(false);
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, base64 })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`);
+      }
+
+      const data: ParsedWorkout = await res.json();
+      setResult(data);
+    } catch (err: any) {
+      alert(`❌ Chyba při zpracování: ${err.message}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -45,13 +70,16 @@ export default function Page() {
           <h2>Výsledky</h2>
           <p><b>Normalized Power:</b> {result.normalized_power?.toFixed(1)} W</p>
           <p><b>IF:</b> {result.if?.toFixed(2)} | <b>TSS:</b> {result.tss?.toFixed(0)}</p>
-          <Line data={{
-            labels: result.series.map(p => p.t / 60),
-            datasets: [
-              { label: "Power (W)", data: result.series.map(p => p.power ?? null), borderColor: "red", borderWidth: 1 },
-              { label: "HR (bpm)", data: result.series.map(p => p.hr ?? null), borderColor: "blue", borderWidth: 1 }
-            ]
-          }} height={300} />
+          <Line
+            data={{
+              labels: result.series.map(p => p.t / 60),
+              datasets: [
+                { label: "Power (W)", data: result.series.map(p => p.power ?? null), borderColor: "red", borderWidth: 1 },
+                { label: "HR (bpm)", data: result.series.map(p => p.hr ?? null), borderColor: "blue", borderWidth: 1 }
+              ]
+            }}
+            height={300}
+          />
         </div>
       )}
     </div>
