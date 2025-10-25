@@ -2,22 +2,30 @@ import { NextRequest } from "next/server";
 const Fit = require("fit-file-parser").default;
 import { Parser } from "xml2js";
 
+export const config = {
+  api: {
+    bodyParser: false, // 🔹 musíme vypnout JSON parser, jinak FormData neprojde
+  },
+};
+
 type Point = { t: number; power?: number; hr?: number; speed_kmh?: number; };
 
 export async function POST(req: NextRequest) {
   try {
-    const { filename, base64 } = await req.json();
-    const buf = Buffer.from(base64, "base64");
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
+    if (!file) return Response.json({ error: "Missing file" }, { status: 400 });
 
-    let series: Point[] = [];
+    const filename = file.name;
+    const buf = Buffer.from(await file.arrayBuffer());
     const ext = (filename.split(".").pop() || "").toLowerCase();
 
+    let series: Point[] = [];
     if (ext === "fit") series = await parseFIT(buf);
     else if (ext === "tcx") series = await parseTCX(buf);
     else if (ext === "gpx") series = await parseGPX(buf);
     else return Response.json({ error: "Unsupported file type" }, { status: 400 });
 
-    // --- výpočty metrik ---
     const avg = (arr: (number | undefined)[]) => {
       const vals = arr.filter((x): x is number => x != null);
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined;
@@ -28,7 +36,7 @@ export async function POST(req: NextRequest) {
     const avg_speed_kmh = avg(series.map(s => s.speed_kmh));
     const duration = series.length ? series[series.length - 1].t - series[0].t : 0;
     const np = normalizedPower(series.map(s => s.power ?? 0));
-    const ftp = 250; // později načteme z nastavení uživatele
+    const ftp = 250;
     const IF = np ? np / ftp : undefined;
     const TSS = np && IF ? ((duration * np * IF) / (ftp * 3600)) * 100 : undefined;
 
