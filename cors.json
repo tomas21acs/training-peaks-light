@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://training-peaks-light-no8v01t6s-tomas21acs-projects.vercel.app"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]
